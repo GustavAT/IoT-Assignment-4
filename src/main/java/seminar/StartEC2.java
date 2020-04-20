@@ -20,12 +20,15 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.AttachVolumeRequest;
+import com.amazonaws.services.ec2.model.AttachVolumeResult;
 import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.AvailabilityZone;
 import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
 import com.amazonaws.services.ec2.model.CreateKeyPairResult;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupRequest;
 import com.amazonaws.services.ec2.model.CreateSecurityGroupResult;
+import com.amazonaws.services.ec2.model.CreateVolumeRequest;
+import com.amazonaws.services.ec2.model.CreateVolumeResult;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.DescribeImagesRequest;
 import com.amazonaws.services.ec2.model.DescribeImagesResult;
@@ -44,6 +47,7 @@ import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+import com.amazonaws.services.ec2.model.VolumeType;
 
 public class StartEC2 {
 
@@ -74,18 +78,25 @@ public class StartEC2 {
 
 		final Instance instance = launchInstance(ec2Client, securityGroupId);
 
-		logger.log(Level.INFO, "Wait for 20 seconds before terminating instance");
-
-		try {
-			Thread.sleep(20000);
-		} catch (final Exception e) {
-			// ignore
-		}
+		waitSeconds(20);
 
 		printInstanceInfo(instance);
+		attachEbsVolume(ec2Client, instance);
+
+		waitSeconds(20);
 
 		stopInstance(ec2Client, instance);
 
+	}
+
+	private static void waitSeconds(final int seconds) {
+		logger.log(Level.INFO, "Wait for {0} seconds", seconds);
+
+		try {
+			Thread.sleep(seconds * 1000);
+		} catch (final Exception e) {
+			// ignore
+		}
 	}
 
 	/**
@@ -281,10 +292,6 @@ public class StartEC2 {
 		final RunInstancesResult result = client.runInstances(request);
 
 		final Instance instance = result.getReservation().getInstances().iterator().next();
-//
-//		final AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
-//				.withInstanceId(instance.getInstanceId());
-
 
 		logger.log(Level.INFO, "Started instance {0}", instance);
 
@@ -318,5 +325,32 @@ public class StartEC2 {
 		client.terminateInstances(request);
 
 		logger.log(Level.INFO, "Terminated instance {0}", instance);
+	}
+
+	/**
+	 * Attach a new EBS volume standard with 8GiB to given {@code instance}.
+	 * @param client Amazon EC2 client
+	 * @param instance Running instance
+	 */
+	private static void attachEbsVolume(@Nonnull final AmazonEC2 client, @Nonnull final Instance instance) {
+		final CreateVolumeRequest createVolumeRequest = new CreateVolumeRequest()
+				.withVolumeType(VolumeType.Standard)
+				.withAvailabilityZone("us-east-1c")
+				.withSize(8);
+
+		final CreateVolumeResult createVolumeResult = client.createVolume(createVolumeRequest);
+
+		logger.log(Level.INFO, "Volume created {0}", createVolumeRequest);
+
+		waitSeconds(20);
+
+		final AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
+				.withInstanceId(instance.getInstanceId())
+				.withVolumeId(createVolumeResult.getVolume().getVolumeId())
+				.withDevice("/dev/sdi");
+
+		final AttachVolumeResult result = client.attachVolume(attachVolumeRequest);
+
+		logger.log(Level.INFO, "Attached volume {0} to running instance", result.getAttachment());
 	}
 }
