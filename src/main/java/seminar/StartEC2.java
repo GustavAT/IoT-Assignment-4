@@ -19,6 +19,7 @@ import javax.annotation.Nonnull;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
+import com.amazonaws.services.ec2.model.AttachVolumeRequest;
 import com.amazonaws.services.ec2.model.AuthorizeSecurityGroupIngressRequest;
 import com.amazonaws.services.ec2.model.AvailabilityZone;
 import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
@@ -33,11 +34,16 @@ import com.amazonaws.services.ec2.model.DescribeKeyPairsResult;
 import com.amazonaws.services.ec2.model.DescribeSecurityGroupsResult;
 import com.amazonaws.services.ec2.model.Filter;
 import com.amazonaws.services.ec2.model.Image;
+import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.ec2.model.InstanceType;
 import com.amazonaws.services.ec2.model.IpPermission;
 import com.amazonaws.services.ec2.model.IpRange;
 import com.amazonaws.services.ec2.model.KeyPair;
 import com.amazonaws.services.ec2.model.KeyPairInfo;
+import com.amazonaws.services.ec2.model.RunInstancesRequest;
+import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.SecurityGroup;
+import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 
 public class StartEC2 {
 
@@ -66,12 +72,26 @@ public class StartEC2 {
 
 		ensureKeyPair(ec2Client);
 
+		final Instance instance = launchInstance(ec2Client, securityGroupId);
+
+		logger.log(Level.INFO, "Wait for 20 seconds before terminating instance");
+
+		try {
+			Thread.sleep(20000);
+		} catch (final Exception e) {
+			// ignore
+		}
+
+		printInstanceInfo(instance);
+
+		stopInstance(ec2Client, instance);
+
 	}
 
 	/**
 	 * Creates a default {@code AmazonEC2} client with {@code Regions.US_WEST_1} and
 	 * the standard credentials loaded from ~/.aws/credentials.
-	 * @return
+	 * @return Amazon EC2 client
 	 */
 	@Nonnull
 	private static AmazonEC2 createStandardEC2Client() {
@@ -189,20 +209,21 @@ public class StartEC2 {
 	/**
 	 * Get or create a new key-pair
 	 * @param client Amazon EC2 client
-	 * @return Key-pair name
 	 */
-	@Nonnull
-	private static String ensureKeyPair(@Nonnull final AmazonEC2 client) {
+	private static void ensureKeyPair(@Nonnull final AmazonEC2 client) {
 		final DescribeKeyPairsRequest request = new DescribeKeyPairsRequest()
 				.withKeyNames(KEY_PAIR_NAME);
 
-		final DescribeKeyPairsResult result = client.describeKeyPairs(request);
-
-		if (!result.getKeyPairs().isEmpty()) {
+		try {
+			final DescribeKeyPairsResult result = client.describeKeyPairs(request);
 			final KeyPairInfo keyPairInfo = result.getKeyPairs().iterator().next();
+
 			logger.log(Level.INFO, "Existing key-pair found {0}", keyPairInfo);
 
-			return keyPairInfo.getKeyName();
+			return;
+		} catch (final Exception e) {
+			// ignore
+			logger.log(Level.INFO, "Could not find existing key pair with name " + KEY_PAIR_NAME, e.fillInStackTrace());
 		}
 
 		final CreateKeyPairRequest createRequest = new CreateKeyPairRequest()
@@ -212,8 +233,6 @@ public class StartEC2 {
 		logger.log(Level.INFO, "Created a new key-pair {0}", keyPair);
 
 		writeKeyPairToFileSystem(keyPair);
-
-		return keyPair.getKeyName();
 	}
 
 
@@ -242,5 +261,62 @@ public class StartEC2 {
 		} catch (final Exception e) {
 			logger.log(Level.INFO, "Could not write key-pair material to file {0}", path);
 		}
+	}
+
+	/**
+	 * Launch an Ubuntu 18.04 x64 t2 nano instance
+	 * @param client Amazon EC2 client
+	 * @param securityGroupId Security group id
+	 * @return Launched instance
+	 */
+	private static Instance launchInstance(@Nonnull final AmazonEC2 client, @Nonnull final String securityGroupId) {
+		final RunInstancesRequest request = new RunInstancesRequest()
+				.withImageId(IMAGE_ID_UBUNTU)
+				.withMinCount(1)
+				.withMaxCount(1)
+				.withInstanceType(InstanceType.T2Nano)
+				.withKeyName(KEY_PAIR_NAME)
+				.withSecurityGroupIds(securityGroupId);
+
+		final RunInstancesResult result = client.runInstances(request);
+
+		final Instance instance = result.getReservation().getInstances().iterator().next();
+//
+//		final AttachVolumeRequest attachVolumeRequest = new AttachVolumeRequest()
+//				.withInstanceId(instance.getInstanceId());
+
+
+		logger.log(Level.INFO, "Started instance {0}", instance);
+
+		return instance;
+	}
+
+	/**
+	 * Print info such as public IP and DNS of given {@code instance}.
+	 * @param instance Running instance
+	 */
+	private static void printInstanceInfo(@Nonnull final Instance instance) {
+		final String message = "Instance: " +
+				instance.getInstanceId() +
+				" with public IP " +
+				instance.getPublicIpAddress() +
+				" and public DNS " +
+				instance.getPublicDnsName();
+
+		logger.log(Level.INFO, "Instance info: {0}", message);
+	}
+
+	/**
+	 * Stop given {@code instance}.
+	 * @param client Amazon EC2 client
+	 * @param instance Running instance
+	 */
+	private static void stopInstance(@Nonnull final AmazonEC2 client, @Nonnull final Instance instance) {
+		final TerminateInstancesRequest request = new TerminateInstancesRequest()
+				.withInstanceIds(instance.getInstanceId());
+
+		client.terminateInstances(request);
+
+		logger.log(Level.INFO, "Terminated instance {0}", instance);
 	}
 }
