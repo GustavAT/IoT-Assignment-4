@@ -30,7 +30,7 @@ import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 
 
-public class Assignment4EC2 {
+public class Assignment4Exercise {
 	
 	static KeyPair keyPair;
 	static AmazonEC2 ec2;

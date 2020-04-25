@@ -49,9 +49,9 @@ import com.amazonaws.services.ec2.model.SecurityGroup;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.ec2.model.VolumeType;
 
-public class StartEC2 {
+public class Assignment04EC2 {
 
-	private static final Logger logger = Logger.getLogger(StartEC2.class.getName());
+	private static final Logger logger = Logger.getLogger(Assignment04EC2.class.getName());
 
 	private static final String IMAGE_ID_UBUNTU = "ami-07ebfd5b3428b6f4d";
 	private static final String SECURITY_GROUP_NAME = "assignment4";
