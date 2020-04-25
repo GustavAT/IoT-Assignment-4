@@ -23,9 +23,7 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.ItemCollection;
-import com.amazonaws.services.dynamodbv2.document.PutItemOutcome;
 import com.amazonaws.services.dynamodbv2.document.QueryOutcome;
-import com.amazonaws.services.dynamodbv2.document.ScanOutcome;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.document.TableCollection;
 import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
@@ -48,14 +46,14 @@ public class Assignment05DynamoDB {
 	private static final String TABLE_NAME = "Movies";
 
 	private static final String MOVIES_FILE_NAME = "moviedata.json";
-	private static final int MOVIES_LIMIT = 30;
+	private static final int MOVIES_LIMIT = 100;
 
 	public static void main(final String[] args) {
 		final DynamoDB dbClient = createDynamoDbClient();
 
 		listTables(dbClient);
 
-		Table moviesTable = createMoviesTable(dbClient);
+		final Table moviesTable = createMoviesTable(dbClient);
 		printTableInfo(moviesTable);
 
 		listTables(dbClient);
@@ -134,13 +132,12 @@ public class Assignment05DynamoDB {
 	 */
 	private static void printTableInfo(@Nonnull final Table table) {
 		final TableDescription description = table.describe();
-		final ItemCollection<ScanOutcome> scanResult = table.scan();
 
 		logger.log(Level.INFO, "Info for {0}: Id: {1}, Status: {2}, Item-count: {3}", new Object[]{
 				description.getTableName(),
 				description.getTableId(),
 				description.getTableStatus(),
-				scanResult.getAccumulatedItemCount()
+				description.getItemCount()
 		});
 	}
 
